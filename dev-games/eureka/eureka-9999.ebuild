@@ -2,14 +2,14 @@
 # Distributed under the terms of the GNU General Public License v2
 
 EAPI=6
-inherit eutils xdg git-r3
+inherit eutils git-r3 git-r3-verify
 
 DESCRIPTION="A map editor for the classic DOOM games, and others such as Heretic and Hexen."
 HOMEPAGE="http://eureka-editor.sourceforge.net"
 EGIT_REPO_URI="https://git.code.sf.net/p/eureka-editor/git eureka-editor-git"
 LICENSE="GPL-2+"
 SLOT="0"
-IUSE="xinerama +verify-git-pull +create-sums"
+IUSE="xinerama +verify-git-sources +create-sums"
 
 case "${PVR}" in
 	1.21-r1)
@@ -50,21 +50,8 @@ DEPEND="${RDEPEND}
 >=sys-apps/gawk-4.1.0"
 
 src_prepare() {
-
-	[ -z "$EGIT_COMMIT" ] && EGIT_COMMIT="$(git rev-parse HEAD)"
-
-	if [ ${PV} != "9999" ] && use verify-git-pull
-	then
-		sha512sum -c "${FILESDIR}/${EGIT_COMMIT}.sha512" || die "sha512 verification FAILED!"
-		einfo "sha512 sums match."
-	elif use create-sums
-	then
-		einfo "Creating sha512 sums..."
-		find -type f -not -regex '.*/\.git/.*' -not -name '*.sha512' -not -name '.git*' -exec sha512sum {} + | tee "${T}/${EGIT_COMMIT}.sha512" | cut -d ' ' -f 2- | while read line; do einfo "$line"; done; unset line
-	elif [ ${PV} != "9999" ]
-	then
-		ewarn "verify-git-pull is DISABLED."
-	fi
+	default # We'll verify the sources first.
+	die on purpose.
 
 	[ -z "$PATCH_VERS" ] && PATCH_VERS="git-p$(git rev-list --count HEAD)-gentoo-$(date --date="$(git show --pretty=%cI HEAD | head -n 1)" +%F) "
 
@@ -79,7 +66,6 @@ src_prepare() {
 		einfo "Adding custom version number."
 		awk -i inplace -v "cvers=$PATCH_VERS" '{if (/^\s*#define\s+EUREKA_VERSION\s+/) {sub("\"$","",$3); $3=$3 "-" cvers "\""} print}' ./src/main.h
 	fi
-	default
 }
 
 #src_compile() {
@@ -92,7 +78,6 @@ src_install() {
 	then
 		echo "$EGIT_COMMIT" > VERSION.nfo
 	else
-		# Cannot git describe ;(
 		#git describe --tags > VERSION.nfo
 		git rev-parse HEAD >> VERSION.nfo
 	fi
@@ -106,12 +91,5 @@ src_install() {
 	mkdir -p "${usr}/share/eureka"
 	mkdir -p "${usr}/bin"
 	emake INSTALL_DIR="${usr}/share/eureka" install
-
-	if [ -f "${T}/${EGIT_COMMIT}.sha512" ]
-	then
-		sum_location="/usr/share/${PN}/${EGIT_COMMIT}.sha512"
-		insinto "${sum_location%/*}/"
-		doins "${T}/${EGIT_COMMIT}.sha512"
-		einfo "sha512 sums stored at '${sum_location}'"
-	fi
+	install-sums
 }
